@@ -160,3 +160,16 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# MacOS
+.DS_Store
+
+# SQLite
+# We don't want to track the database files for sqlite (add other extensions if needed).
+*.sqlite
+
+# Tool specific
+# req-stri-per has requirement files as input and output, it doesn't make sense to
+# add them to the version control
+req-strip-ver.py/requirements.txt
+req-strip-ver.py/requirements.txt.stripped.txt
