@@ -1,8 +1,14 @@
+import argparse
 from hashlib import md5
 import os
 from pathlib import Path
 import sqlite3
 import sys
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Recursively scans directory hashing files and outputting SQLite DB.")
+    parser.add_argument("-v", dest="verb", type=int, default=1, help="Set verbosity level from 0 to 3 (default 1)")
+    return parser.parse_args()
 
 file_filters = []
 dir_filters = []
@@ -18,13 +24,14 @@ sql_stmts = {
 
 # allowed_extensions and blocked_extensions are mutually exclusive
 filters = {
-    "allowed_extensions": ["mp3", "flac", "m4a", "wma", "ogg", "wav"],
+    # "allowed_extensions": ["mp3", "flac", "m4a", "wma", "ogg", "wav"],
+    "allowed_extensions": [],
     "blocked_extensions": [],
 }
 
 def is_indexed(path: str, name: str) -> bool:
     ext = os.path.splitext(name)[1]
-    print(ext, (not ext[1:] in filters["allowed_extensions"]))
+    # print(ext, (not ext[1:] in filters["allowed_extensions"]))
     if (len(filters["allowed_extensions"]) > 0) and (not ext[1:] in filters["allowed_extensions"]):
         return False
     return True
@@ -44,14 +51,23 @@ def db_add_records(conn, cur, records):
     cur.executemany("INSERT INTO file VALUES (?,?,?,?,?)", records)
     conn.commit()
 
-def create_records(entries, next_id=1):
+def create_records(entries, next_id=1, verbosity=3):
     records = []
+    n = len(entries)
+    i = 0
     for entry in entries:
+        i += 1
+        if verbosity > 2:
+            print(f"{int(100*i/n)}% {str(entry[0])}")
         for file in entry[2]:
             if is_indexed(entry[0], file):
                 file_path = os.path.join(entry[0],file)
-                records.append((next_id, str(entry[0]), file, md5_for_file(file_path), os.path.getsize(file_path)))
-                next_id += 1
+                try:
+                    md5 = md5_for_file(file_path)
+                    records.append((next_id, str(entry[0]), file, md5, os.path.getsize(file_path)))
+                    next_id += 1
+                except:
+                    print(f"Error with entry {file_path} (Ignoring)")
     return records
     
     
@@ -60,33 +76,30 @@ def md5_for_file(file):
     with open(file, 'rb') as file_to_check:
         data = file_to_check.read()    
         md5_returned = md5(data).hexdigest()
+    
+    
     return md5_returned
 
 def content_of(dir: str) -> list:
     path = Path(dir)
     return [x for x in path.walk()]
 
-if __name__ == "__main__":
+def main():
+    args = parse_arguments()
     root = "."
     db_path = "db.sqlite"
     if len(sys.argv) > 1:
         root = os.path.expanduser(sys.argv[1])
     if len(sys.argv) > 2:
         db_path = sys.argv[2]
-    verbosity = 3 # 0 Min (no output) -- 3 Max (debug output)
         
     db_conn, db_cur = db_open_and_init(db_path)    
     content = content_of(root)
-        
-    if verbosity >= 2:
-        for c in content:
-            for file in c[2]:
-                file_path = os.path.join(c[0],file)
-                print(f"{str(c[0]):<40}{file:<40}{md5_for_file(file_path)}\t{os.path.getsize(file_path):>12} Byte")
             
-    # db_add_entries(db_cur, content)
+    # TODO: User the next_id key parameter (this should solve issue #1)
     records = create_records(content)
     db_add_records(db_conn, db_cur, records)
-    
-            
     db_conn.close()
+    
+if __name__ == "__main__":
+    main()

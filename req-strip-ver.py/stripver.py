@@ -10,9 +10,6 @@ stripped = []
 
 with open(file_name) as f:
     stripped = [line.split("==")[0] + "\n" for line in f]
-    
-    
-print(stripped)
         
 with open(out_name, "w") as f:
     f.writelines(stripped)

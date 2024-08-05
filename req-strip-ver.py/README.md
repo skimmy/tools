@@ -1,1 +1,1 @@
-# Stripe version from requirements (`req-strip-ver`)
+# Strip version from requirements (`req-strip-ver`)
