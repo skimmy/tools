@@ -3,10 +3,11 @@ from hashlib import md5
 import os
 from pathlib import Path
 import sqlite3
-import sys
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Recursively scans directory hashing files and outputting SQLite DB.")
+    parser.add_argument("dirname", type=str, help="The directory to scan")
+    parser.add_argument("sqlfile", type=str, default="db.sqlite", help="The destination SQLIte file")
     parser.add_argument("-v", dest="verb", type=int, default=1, help="Set verbosity level from 0 to 3 (default 1)")
     return parser.parse_args()
 
@@ -86,12 +87,9 @@ def content_of(dir: str) -> list:
 
 def main():
     args = parse_arguments()
-    root = "."
-    db_path = "db.sqlite"
-    if len(sys.argv) > 1:
-        root = os.path.expanduser(sys.argv[1])
-    if len(sys.argv) > 2:
-        db_path = sys.argv[2]
+    root = os.path.expanduser(args.dirname)
+    db_path = os.path.expanduser(args.sqlfile)
+
         
     db_conn, db_cur = db_open_and_init(db_path)    
     content = content_of(root)
