@@ -13,4 +13,5 @@ Collection of tools (mostly Python scripts) for various tasks.
 - [Directory to SQL](./dir2sql/) (`dir2sql`)
 - [Directory compare](./dircmp/) (`dircmp`)
 - [Find duplicates](./finddup/) (`findup`)
+- [File system diff](./diffrust/) (`diffrust`)
 
