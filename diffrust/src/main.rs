@@ -1,145 +1,139 @@
-use clap::Parser;
-use std::ffi::OsStr;
-// use md5::{Md5, Digest};
-// use log::info;
-use std::fs;
-use std::io;
-use std::path::Path;
 use std::path::PathBuf;
+use clap::Parser;
 
 #[derive(Parser)]
 #[command(name = "FS Diff")]
 #[command(version = "0.1")]
 #[command(about = "Diff for the File System", long_about = None)]
 struct Cli {
+    /// The path to the opened collection
     #[arg(long, short, default_value = "/")]
-    path: String,
-}
-
-fn find_dirs(dir: &Path, dir_list: &mut Vec<Dir>) -> io::Result<()> {
-    if dir.is_dir() {
-        // TODO: We need some code to add the current directory di `dir_list`
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                // TODO: compute name from path
-                let d = Dir {
-                    path: path.clone(),
-                    name: match path.file_name() {
-                        Some(c) => c,
-                        _ => OsStr::new(""),
-                    },
-                    dir_type: (),
-                    files: Vec::new(),
-                };
-                dir_list.push(d);
-                // If it's a directory, recurse into it
-                find_dirs(&path, dir_list)?;
-            }
-        }
-    }
-    Ok(())
-}
-
-// fn bytes_to_hex(bytes: &[u8]) -> String {
-//     let mut md5 = String::new();
-//     for byte in bytes {
-//         md5.push_str(&format!("{byte:02x}"));
-//     }
-//     md5
-// }
-
-/// A structure representing a monitored directory
-#[derive(Debug)]
-struct Dir {
-    /// The directory path
     path: PathBuf,
-    /// The name of the directory
-    name: OsStr,
-    /// Will be a future custom Enum
-    dir_type: (),
-    /// The files present in the directory
-    files: Vec<File>,
 }
 
-impl Dir {
-    /// updates the content of the `files` property by accessing the filesystem
-    /// The updates happens by:
-    /// - adding non-existing files
-    /// - removing files not present anymore on the filesystem
-    /// - updated files present
-    /// Files in the property and in the filesystem are compared by name.
-    fn update_files(&self) -> io::Result<()> {
-        for item in fs::read_dir(&self.path)? {
-            println!("{item:?}");
+pub mod fsutil {
+    use std::fs;
+    use std::path::Path;
+    use std::time::SystemTime;
+
+    pub fn get_last_modified_time(path: &Path) -> Result<SystemTime, std::io::Error> {
+        fs::metadata(path)?.modified()
+    }
+}
+
+pub mod core {
+    use std::fs;
+    use std::io;
+    use std::io::Read;
+    use std::path::PathBuf;
+    use serde_json::Value;
+    use md5;
+
+    /// Attempts to parse content as a configuration storing result into collection
+    fn parse_config(content: &str, collection: &mut Collection) -> serde_json::Result<()> {
+        let v: Value = serde_json::from_str(content)?;
+        if let Some(name) = v.get("name").and_then(|n| n.as_str()) {
+            collection.name = name.to_string();
         }
         Ok(())
     }
-}
 
-/// A structure representing a tracked file
-#[derive(Debug)]
-struct File {
-    /// The file path relative to the 'root'
-    rpath: PathBuf,
-    /// The file name
-    name: String,
-    /// File extension
-    ext: String,
-    /// The has of the file
-    md5: [u8; 16],
+    pub fn open_or_create_config(root: &PathBuf) -> Collection {
+        let config = root.join(".diffrust.conf");
+
+        let mut collection = Collection {
+            name: String::from(""),
+            root: root.clone(),
+            db: None,
+            root_dir: None,
+        };
+        if config.is_file() {
+            if let Ok(content) = fs::read_to_string(&config) {
+                let _ = parse_config(&content, &mut collection);
+                collection.db = Some(config);
+            }
+        }
+        collection
+    }
+
+    #[derive(Debug)]
+    pub struct Collection {
+        /// Collection name
+        pub name: String,
+        /// The root path of the collection
+        pub root: PathBuf,
+        /// Path to db file. If None path is root/.diffrust.conf
+        db: Option<PathBuf>,
+        /// The root Dir struct. Can be None if not present or initialized.
+        root_dir: Option<Dir>,
+    }
+
+    impl Collection {
+        pub fn save(&self) -> Result<(), std::io::Error> {
+            // let config_path = self.db.as_ref().unwrap_or(&self.root.join(".diffrust.conf"));
+            // let json = serde_json::to_string(self)?;
+            // fs::write(config_path, json)
+            Ok(())
+        }
+
+        pub fn scan(&mut self) {
+            let dir = self.root_dir.get_or_insert_with(|| {
+                Dir {
+                    files: Vec::new(),
+                    path: self.root.clone(),
+                }
+            });
+            if let Err(e) = dir.scan() {
+                eprint!("Error on scanning root dir");
+            }
+        }
+    }
+    #[derive(Debug)]
+    pub struct Dir {
+        pub path: PathBuf,
+        pub files: Vec<File>,
+    }
+
+    impl Dir {
+        pub fn scan(&mut self) -> Result<(), io::Error> {
+            for entry in fs::read_dir(self.path.as_path())? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_file() {
+                    let mut file = fs::File::open(&path)?;
+                    let mut contents = Vec::new();
+                    file.read_to_end(&mut contents)?;
+                    self.files.push(File {
+                        path: PathBuf::from(path),
+                        md5: md5::compute(&contents),
+                    });
+                }
+            } 
+            Ok(())
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct File {
+        /// File path
+        path: PathBuf,
+        /// The hash of the file
+        md5: md5::Digest,
+    }
 }
 
 fn main() {
     let cli = Cli::parse();
     println!("{:?}", cli.path);
-    println!("Welcome to FS-Diff compare file system directories");
-    // let p = "/Users/skimmy/src/aoc";
-    let mut dirs: Vec<Dir> = Vec::new();
-    match find_dirs(Path::new(&cli.path), &mut dirs) {
-        Err(e) => println!("There was some Error: {e}"),
-        _ => {
-            for d in dirs {
-                let _ = d.update_files();
-
-                println!(
-                    "{}\n  {} ({} files)",
-                    d.path.to_str().unwrap_or("[EMPTY PATH]"),
-                    d.name.to_str().unwrap_or("[NO NAME]"),
-                    d.files.len()
-                );
-            }
-        }
+    println!("Welcome to FS-Diff compare 🔄` file system directories 📁");
+    let mut collection: core::Collection = core::open_or_create_config(&cli.path);
+    match collection.name.as_str() {
+        "" => println!("Unnamed collection opened at"),
+        _ => println!("Opened {} collection at", collection.name)
     }
+    collection.scan();
+    println!("{collection:?}");
 
-    // let f = File {
-    //     rpath: PathBuf::from(p),
-    //     name: String::from("abc"),
-    //     md5: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
-    //     ext: String::from("txt"),
-    // };
-    // println!("{}", f.to_string());
-    // println!("{f:?}");
-
-    // let mut hasher = Md5::new();
-    // hasher.update("Hello World!");
-    // println!("{:x?}", hasher.finalize());
-
-    // println!("{:?}", fs::metadata("/tmp/text.html"));
+    // DEV CODE BELOW
+    println!("{:?}", fsutil::get_last_modified_time(collection.root.as_path()));
 }
-/*
-We are now at the point where our code (find_dirs functions) creates a list
-of directories starting from a root path. The function needs further improvements
-(see above), but we are ready for the next step.
-
-The next step is to scan directories one-by-one and looking for files within
-them. For each file that we find we create a new File instance and put it into
-the `files` field of the Dir struct. During this creation we should compute
-all the useful information like `last_update` and `md5` of the file.
-
-Improvements:
-- Start adding the last_update field to File and Dir (this requires finding a
-good way to manage date and time in Rust).
-
-*/
