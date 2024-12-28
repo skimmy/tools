@@ -1,8 +1,9 @@
-use std::error::Error;
+use std::{collections::HashSet, error::Error};
 use std::fs;
 use std::path::PathBuf;
 
 use chrono::{DateTime, Local};
+use md5::Digest;
 use serde_json::Value;
 
 use args::Config;
@@ -49,7 +50,6 @@ fn print_welcome() {
 }
 
 fn print_content(content: &Vec<ContentType>) {
-    
     // TODO: still need to implement sorting
     let mut dir_count = 0;
     let mut file_count = 0;
@@ -57,34 +57,42 @@ fn print_content(content: &Vec<ContentType>) {
     for item in content {
         match &item {
             ContentType::ContentDir(d) => {
-                println!("📁 {:?}", d.path.file_name());
+                println!("📁 {:}", d.path.file_name().unwrap().to_str().unwrap());
                 dir_count += 1;
             }
-            _ => ()
+            _ => (),
         }
-        
     }
 
     // print files next
+    let mut md5_set: HashSet<&Digest> = HashSet::new();
     for item in content {
         match &item {
             ContentType::ContentFile(f) => {
-                println!("🗄  {:?} ({:?})", f.path.file_name(), f.md5);
+                println!("🗄  {:} ({:?})", f.path.file_name().unwrap().to_str().unwrap(), f.md5);
+                md5_set.insert(&f.md5);
                 file_count += 1;
             }
-            _ => ()
+            _ => (),
         }
     }
     println!("{dir_count} total directories");
-    println!("{file_count} total files (?? duplicates)");
+    println!("{} total files ({} unique)", file_count, md5_set.len());
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     print_welcome();
     let mut collection: model::Collection = open_or_create_config(&config.path);
     match collection.name.as_str() {
-        "" => println!("Unnamed collection opened at {}", &config.path.to_str().unwrap_or("")),
-        _ => println!("Opened {} collection at {}", collection.name, &config.path.to_str().unwrap_or(""))
+        "" => println!(
+            "Unnamed collection opened at {}",
+            &config.path.to_str().unwrap_or("")
+        ),
+        _ => println!(
+            "Opened {} collection at {}",
+            collection.name,
+            &config.path.to_str().unwrap_or("")
+        ),
     }
     collection.scan()?;
     match collection.root_dir {
@@ -93,7 +101,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             let last_modified_time = fsutil::get_last_modified_time(collection.root.as_path())?;
             let local_time: DateTime<Local> = last_modified_time.into();
             println!("Last modified: {:}", local_time.format("%Y-%m-%d %H:%M:%S"));
-        },
+        }
         _ => (),
     };
     Ok(())

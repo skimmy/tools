@@ -72,7 +72,7 @@ impl Dir {
                 if path.is_dir() {
                     self.content.push(ContentType::ContentDir(Dir {
                         path: PathBuf::from(path),
-                        content: Vec::new(),    
+                        content: Vec::new(),
                     }));
                 }
             }
@@ -86,7 +86,7 @@ impl Dir {
     //         .filter_map(|item| {
     //             match item {
     //                 ContentType::ContentDir(d) => Some(*d),
-    //                 _ => None                    
+    //                 _ => None
     //             }
     //         }).collect();
     //         // sub.sort_by();
@@ -101,7 +101,6 @@ pub struct File {
     /// The hash of the file
     pub md5: md5::Digest,
 }
-
 
 impl PartialOrd for File {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

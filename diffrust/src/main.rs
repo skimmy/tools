@@ -4,5 +4,5 @@ fn main() {
     if let Err(e) = diffrust::run(config) {
         println!("Error\n  {e}\nTerminating!");
         std::process::exit(1)
-    }  
+    }
 }
