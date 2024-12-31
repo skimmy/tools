@@ -3,15 +3,20 @@ use std::cmp::Ordering;
 use std::fs;
 use std::io;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+/// The types of content that a directory can contain
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum ContentType {
+    /// Directory content
     ContentDir(Dir),
+    /// File content
     ContentFile(File),
+    /// Hard or symbolic link content (not yet implemented)
     ContentLink,
 }
 
+/// A directory that is indexed by diffrust
 #[derive(Debug)]
 pub struct Collection {
     /// Collection name
@@ -25,9 +30,35 @@ pub struct Collection {
 }
 
 impl Collection {
+    /// Creates a new empty `Collection`
+    /// 
+    /// An empty `Collection` has its fields set to some default values.
+    /// In particular, string and string-type values are set to empty
+    /// strings and `Option` enums are set to `None`.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use diffrust::core::model::Collection;
+    /// use std::path::PathBuf;
+    /// let c = Collection::new();
+    /// assert_eq!(c.name,String::new());
+    /// assert_eq!(c.root, PathBuf::new());
+    /// assert!(c.db.is_none());
+    /// assert!(c.root_dir.is_none());
+    /// ```
     pub fn new() -> Self {
         Collection {
-            name: String::from(""),
+            name: String::new(),
+            root: PathBuf::new(),
+            db: None,
+            root_dir: None,
+        }
+    }
+
+    pub fn from(path: &Path) -> Self {
+        Collection {
+            name: String::new(),
             root: PathBuf::new(),
             db: None,
             root_dir: None,
@@ -49,15 +80,17 @@ impl Collection {
         dir.scan()
     }
 }
+
+/// An indexed directory
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct Dir {
+    /// Absolute path of the directory
     pub path: PathBuf,
+    /// Directory content
     pub content: Vec<ContentType>,
 }
 
-impl Eq for Dir {
-
-}
+impl Eq for Dir { }
 
 impl Ord for Dir {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -89,6 +122,30 @@ impl Dir {
         }
         Ok(())
     }
+
+    pub fn sorted_dirs(&self) -> Vec<&Dir> {
+        let mut dirs: Vec<&Dir> = self.content.iter().filter_map(|item|
+            if let ContentType::ContentDir(d) = item {
+                Some(d)
+            } else {
+                None
+            }
+        ).collect();
+        dirs.sort_unstable();
+        dirs
+    }
+
+    pub fn sorted_files(&self) -> Vec<&File> {
+        let mut files: Vec<&File> = self.content.iter().filter_map(|item|
+            if let ContentType::ContentFile(f) = item {
+                Some(f)
+            } else {
+                None
+            }
+        ).collect();
+        files.sort_unstable();
+        files
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -113,10 +170,65 @@ impl Ord for File {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
-    fn dummy_test() {
-        assert_eq!(0, 0);
+    fn collection_new() {
+        let collection = Collection::new();
+        assert_eq!(collection.name, "");
+        assert_eq!(collection.root, PathBuf::new());
+        assert!(collection.db.is_none());
+        assert!(collection.root_dir.is_none());
+    }
+
+    #[test]
+    fn collection_from_path() {
+        let dir = tempdir().unwrap();
+        let collection = Collection::from(dir.path());
+        assert_eq!(collection.root, PathBuf::from(dir.path()), "Unmatched paths");
+    }
+
+    #[test]
+    fn collection_save_ok() {
+        let collection = Collection::new();
+        let result = collection.save();
+        assert!(result.is_ok());
+        assert!(false, "Need to implement file checking test");
+    }
+
+    #[test]
+    fn scan_empty() {
+        assert!(false, "Need to implement scan of empty directory test");
+    }
+
+    #[test]
+    fn scan_content() {
+        assert!(false, "Need to implement scan of directory test");
+    }
+
+    #[test]
+    fn dir_compare() {
+        let d1 = Dir {
+            path: PathBuf::from("/abc"),
+            content: vec!(),
+        };
+        let d2 = Dir {
+            path: PathBuf::from("/abc/aaa"),
+            content: vec!(),
+        };
+        let d3 = Dir {
+            path: PathBuf::from("/abf"),
+            content: vec!()
+        };
+        assert_eq!(Ordering::Less, d1.cmp(&d3));
+        assert_eq!(Ordering::Greater, d2.cmp(&d1));
+        assert_eq!(Ordering::Equal, d3.cmp(&d3));
+    }
+
+    #[test]
+    fn dir_scan() {
+        assert!(false, "Need to implement Dir scan test");
     }
 }

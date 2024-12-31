@@ -7,10 +7,10 @@ use md5::Digest;
 use serde_json::Value;
 
 use args::Config;
-use core::model::{self, Collection, ContentType, Dir};
+use core::model::{self, Collection, Dir};
 
 pub mod args;
-mod core;
+pub mod core;
 
 mod fsutil {
     use std::fs;
@@ -49,25 +49,9 @@ fn print_welcome() {
     println!("\nWelcome to FS-Diff compare 🔄` file system directories 📁");
 }
 
-fn print_content(content: &Vec<ContentType>) {
-    // TODO: still need to implement sorting
-    let mut dirs: Vec<&Dir> = content.iter().filter_map(|item|
-        if let ContentType::ContentDir(d) = item {
-            Some(d)
-        } else {
-            None
-        }
-    ).collect();
-    dirs.sort_unstable();
-
-    let mut files: Vec<&core::model::File> = content.iter().filter_map(|item|
-        if let ContentType::ContentFile(f) = item {
-            Some(f)
-        } else {
-            None
-        }
-    ).collect();
-    files.sort_unstable();
+fn print_content(dir: &Dir) {
+    let dirs = dir.sorted_dirs();
+    let files = dir.sorted_files();
 
     // print directories first
     println!();
@@ -75,16 +59,14 @@ fn print_content(content: &Vec<ContentType>) {
         println!(" 📁 {:}", item.path.file_name().unwrap().to_str().unwrap());
     }
 
-    // print files next
+    // print files next counting unique md5's
     let mut md5_set: HashSet<&Digest> = HashSet::new();
     for item in files.iter() {
         md5_set.insert(&item.md5);
         println!(" 🗄  {:} ({:?})", item.path.file_name().unwrap().to_str().unwrap(), &item.md5);
     }
-    println!();
-    println!("{} total directories", dirs.len());
-    println!("{} total files ({} unique)", files.len(), md5_set.len());
-    println!();
+    println!("\n{} total directories", dirs.len());
+    println!("{} total files ({} unique)\n", files.len(), md5_set.len());
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
@@ -104,7 +86,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     collection.scan()?;
     match collection.root_dir {
         Some(c) => {
-            print_content(&c.content);
+            print_content(&c);
             let last_modified_time = fsutil::get_last_modified_time(collection.root.as_path())?;
             let local_time: DateTime<Local> = last_modified_time.into();
             println!("Last modified: {:}", local_time.format("%Y-%m-%d %H:%M:%S"));
