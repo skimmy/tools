@@ -55,6 +55,16 @@ pub struct Dir {
     pub content: Vec<ContentType>,
 }
 
+impl Eq for Dir {
+
+}
+
+impl Ord for Dir {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        return self.path.cmp(&other.path);
+    }
+}
+
 impl Dir {
     pub fn scan(&mut self) -> Result<(), io::Error> {
         for entry in fs::read_dir(self.path.as_path())? {
@@ -79,22 +89,9 @@ impl Dir {
         }
         Ok(())
     }
-
-    // pub fn sorted_subdir(&self) -> Vec<Dir> {
-    //     let mut sub: Vec<Dir> = self.content
-    //         .iter()
-    //         .filter_map(|item| {
-    //             match item {
-    //                 ContentType::ContentDir(d) => Some(*d),
-    //                 _ => None
-    //             }
-    //         }).collect();
-    //         // sub.sort_by();
-    //         sub
-    // }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct File {
     /// File path
     pub path: PathBuf,
@@ -105,6 +102,12 @@ pub struct File {
 impl PartialOrd for File {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.path.cmp(&other.path))
+    }
+}
+
+impl Ord for File {
+    fn cmp(&self, other: &Self) ->std::cmp::Ordering {
+        return self.path.cmp(&other.path);
     }
 }
 

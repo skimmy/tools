@@ -7,7 +7,7 @@ use md5::Digest;
 use serde_json::Value;
 
 use args::Config;
-use core::model::{self, Collection, ContentType};
+use core::model::{self, Collection, ContentType, Dir};
 
 pub mod args;
 mod core;
@@ -51,33 +51,40 @@ fn print_welcome() {
 
 fn print_content(content: &Vec<ContentType>) {
     // TODO: still need to implement sorting
-    let mut dir_count = 0;
-    let mut file_count = 0;
-    // print directories first
-    for item in content {
-        match &item {
-            ContentType::ContentDir(d) => {
-                println!("📁 {:}", d.path.file_name().unwrap().to_str().unwrap());
-                dir_count += 1;
-            }
-            _ => (),
+    let mut dirs: Vec<&Dir> = content.iter().filter_map(|item|
+        if let ContentType::ContentDir(d) = item {
+            Some(d)
+        } else {
+            None
         }
+    ).collect();
+    dirs.sort_unstable();
+
+    let mut files: Vec<&core::model::File> = content.iter().filter_map(|item|
+        if let ContentType::ContentFile(f) = item {
+            Some(f)
+        } else {
+            None
+        }
+    ).collect();
+    files.sort_unstable();
+
+    // print directories first
+    println!();
+    for item in dirs.iter() {
+        println!(" 📁 {:}", item.path.file_name().unwrap().to_str().unwrap());
     }
 
     // print files next
     let mut md5_set: HashSet<&Digest> = HashSet::new();
-    for item in content {
-        match &item {
-            ContentType::ContentFile(f) => {
-                println!("🗄  {:} ({:?})", f.path.file_name().unwrap().to_str().unwrap(), f.md5);
-                md5_set.insert(&f.md5);
-                file_count += 1;
-            }
-            _ => (),
-        }
+    for item in files.iter() {
+        md5_set.insert(&item.md5);
+        println!(" 🗄  {:} ({:?})", item.path.file_name().unwrap().to_str().unwrap(), &item.md5);
     }
-    println!("{dir_count} total directories");
-    println!("{} total files ({} unique)", file_count, md5_set.len());
+    println!();
+    println!("{} total directories", dirs.len());
+    println!("{} total files ({} unique)", files.len(), md5_set.len());
+    println!();
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
