@@ -31,13 +31,13 @@ pub struct Collection {
 
 impl Collection {
     /// Creates a new empty `Collection`
-    /// 
+    ///
     /// An empty `Collection` has its fields set to some default values.
     /// In particular, string and string-type values are set to empty
     /// strings and `Option` enums are set to `None`.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use diffrust::core::model::Collection;
     /// use std::path::PathBuf;
@@ -59,7 +59,7 @@ impl Collection {
     pub fn from(path: &Path) -> Self {
         Collection {
             name: String::new(),
-            root: PathBuf::new(),
+            root: PathBuf::from(path),
             db: None,
             root_dir: None,
         }
@@ -90,7 +90,7 @@ pub struct Dir {
     pub content: Vec<ContentType>,
 }
 
-impl Eq for Dir { }
+impl Eq for Dir {}
 
 impl Ord for Dir {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -124,30 +124,39 @@ impl Dir {
     }
 
     pub fn sorted_dirs(&self) -> Vec<&Dir> {
-        let mut dirs: Vec<&Dir> = self.content.iter().filter_map(|item|
-            if let ContentType::ContentDir(d) = item {
-                Some(d)
-            } else {
-                None
-            }
-        ).collect();
+        let mut dirs: Vec<&Dir> = self
+            .content
+            .iter()
+            .filter_map(|item| {
+                if let ContentType::ContentDir(d) = item {
+                    Some(d)
+                } else {
+                    None
+                }
+            })
+            .collect();
         dirs.sort_unstable();
         dirs
     }
 
     pub fn sorted_files(&self) -> Vec<&File> {
-        let mut files: Vec<&File> = self.content.iter().filter_map(|item|
-            if let ContentType::ContentFile(f) = item {
-                Some(f)
-            } else {
-                None
-            }
-        ).collect();
+        let mut files: Vec<&File> = self
+            .content
+            .iter()
+            .filter_map(|item| {
+                if let ContentType::ContentFile(f) = item {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+            .collect();
         files.sort_unstable();
         files
     }
 }
 
+/// And indexed file
 #[derive(Debug, PartialEq, Eq)]
 pub struct File {
     /// File path
@@ -163,13 +172,15 @@ impl PartialOrd for File {
 }
 
 impl Ord for File {
-    fn cmp(&self, other: &Self) ->std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         return self.path.cmp(&other.path);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use tempfile::tempdir;
 
     use super::*;
@@ -187,7 +198,11 @@ mod tests {
     fn collection_from_path() {
         let dir = tempdir().unwrap();
         let collection = Collection::from(dir.path());
-        assert_eq!(collection.root, PathBuf::from(dir.path()), "Unmatched paths");
+        assert_eq!(
+            collection.root,
+            PathBuf::from(dir.path()),
+            "Unmatched paths"
+        );
     }
 
     #[test]
@@ -200,7 +215,26 @@ mod tests {
 
     #[test]
     fn scan_empty() {
-        assert!(false, "Need to implement scan of empty directory test");
+        let tempdir = tempdir().unwrap();
+        let mut collection = Collection::new();
+        collection.root = PathBuf::from(tempdir.path());
+        let _ = collection.scan();
+
+        assert_ne!(
+            None, collection.root_dir,
+            "root_dir is None even after scan() of valid directory"
+        );
+        assert_eq!(
+            tempdir.path(),
+            collection.root_dir.as_ref().unwrap().path,
+            "Path of root Dir not matching given directory"
+        );
+        let content = collection.root_dir.unwrap().content;
+        assert_eq!(
+            0,
+            content.len(),
+            "Scan found some content in empty directory"
+        );
     }
 
     #[test]
@@ -212,15 +246,15 @@ mod tests {
     fn dir_compare() {
         let d1 = Dir {
             path: PathBuf::from("/abc"),
-            content: vec!(),
+            content: vec![],
         };
         let d2 = Dir {
             path: PathBuf::from("/abc/aaa"),
-            content: vec!(),
+            content: vec![],
         };
         let d3 = Dir {
             path: PathBuf::from("/abf"),
-            content: vec!()
+            content: vec![],
         };
         assert_eq!(Ordering::Less, d1.cmp(&d3));
         assert_eq!(Ordering::Greater, d2.cmp(&d1));
@@ -230,5 +264,74 @@ mod tests {
     #[test]
     fn dir_scan() {
         assert!(false, "Need to implement Dir scan test");
+    }
+
+    #[test]
+    fn sort_files() {
+        let dir = Dir {
+            path: PathBuf::from("/"),
+            content: content_vector(),
+        };
+        let sorted = dir.sorted_files();
+        let v = files_vector();
+        assert_eq!(vec![&v[0], &v[1]], sorted, "Unsorted files in Dir")
+    }
+
+    #[test]
+    fn sort_dirs() {
+        let dir = Dir {
+            path: PathBuf::from(""),
+            content: content_vector(),
+        };
+        let sorted = dir.sorted_dirs();
+        let v = dirs_vector();
+        assert_eq!(vec![&v[0], &v[1]], sorted, "Unsorted directories in Dir");
+    }
+
+    fn content_vector() -> Vec<ContentType> {
+        vec![
+            ContentType::ContentFile(File {
+                path: PathBuf::from("/README.md"),
+                md5: md5::compute(b"README"),
+            }),
+            ContentType::ContentDir(Dir {
+                path: PathBuf::from("/"),
+                content: vec![],
+            }),
+            ContentType::ContentFile(File {
+                path: PathBuf::from("~/Documents/hello.txt"),
+                md5: md5::compute(b"Hello World!"),
+            }),
+            ContentType::ContentDir(Dir {
+                path: PathBuf::from("/root"),
+                content: vec![],
+            }),
+        ]
+    }
+
+    fn files_vector() -> Vec<File> {
+        vec![
+            File {
+                path: PathBuf::from("/README.md"),
+                md5: md5::compute(b"README"),
+            },
+            File {
+                path: PathBuf::from("~/Documents/hello.txt"),
+                md5: md5::compute(b"Hello World!"),
+            },
+        ]
+    }
+
+    fn dirs_vector() -> Vec<Dir> {
+        vec![
+            Dir {
+                path: PathBuf::from("/"),
+                content: vec![],
+            },
+            Dir {
+                path: PathBuf::from("/root"),
+                content: vec![],
+            }
+        ]
     }
 }
