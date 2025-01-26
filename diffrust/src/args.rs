@@ -9,6 +9,10 @@ use clap::Parser;
 pub struct Config {
     /// The path to the opened collection
     pub path: PathBuf,
+
+    /// A pattern for finding files by name
+    #[arg(short, long)]
+    pub find: Option<String>,
 }
 
 impl Config {
